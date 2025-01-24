@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zzhtl/goxml/color"
 	"github.com/zzhtl/goxml/document"
+	"github.com/zzhtl/goxml/measurement"
+	"github.com/zzhtl/goxml/schema/soo/wml"
 )
 
 // DocParagraph -
@@ -17,7 +20,7 @@ type DocParagraph struct {
 }
 
 func Test_readParagraphs(t *testing.T) {
-	docx, err := document.Open("testdata/office/template.docx")
+	docx, err := document.Open("testdata/office/test.docx")
 	if err != nil {
 		panic(err)
 	}
@@ -45,6 +48,56 @@ func Test_readParagraphs(t *testing.T) {
 	}
 }
 
+func Test_addTable(t *testing.T) {
+	docx, err := document.Open("testdata/office/test.docx")
+	if err != nil {
+		panic(err)
+	}
+	paras := docx.Paragraphs()
+	headers := []string{"标题", "内容"}
+	rows := [][]string{
+		{"标题1", "内容1"},
+		{"标题2", "内容2"},
+		{"标题3", "内容3"},
+	}
+	for _, para := range paras {
+		level := getHeadingLevel(para.Style())
+		if level != "" {
+			if matchParagraphTitle(para, level, "概述", "a0") {
+				newPara := docx.InsertParagraphAfter(para)
+				table := docx.InsertTableBefore(newPara)
+				// 设置表格宽度为100%
+				table.Properties().SetWidthPercent(100)
+				borders := table.Properties().Borders()
+				// 设置所有边框为单线黑色
+				borders.SetAll(wml.ST_BorderSingle, color.Black, measurement.Dxa)
+				// 添加表头
+				row := table.AddRow()
+				for _, header := range headers {
+					cell := row.AddCell()
+					cellPara := cell.AddParagraph()
+					cellRun := cellPara.AddRun()
+					// 设置背景颜色
+					cell.Properties().SetShading(wml.ST_ShdClear, color.Black, color.LightSteelBlue)
+					cellRun.Properties().SetColor(color.Black)
+					cellRun.Properties().SetBold(true)
+					cellRun.AddText(header)
+				}
+				for _, r := range rows {
+					row := table.AddRow()
+					for _, val := range r {
+						cell := row.AddCell()
+						cellPara := cell.AddParagraph()
+						cellRun := cellPara.AddRun()
+						cellRun.AddText(val)
+					}
+				}
+			}
+		}
+	}
+	docx.SaveToFile("testdata/office/output.docx")
+}
+
 func getHeadingLevel(style string) string {
 	switch style {
 	case "1", "2", "3", "4", "5", "6", "7", "8":
@@ -64,6 +117,19 @@ func getParagraphText(p document.Paragraph) string {
 		}
 	}
 	return title
+}
+
+func matchParagraphTitle(para document.Paragraph, level string, title, paragraph string) bool {
+	if paragraph == "" || title == "" {
+		return false
+	}
+	if level == "" {
+		return false
+	}
+	if level == paragraph && getParagraphText(para) == title {
+		return true
+	}
+	return false
 }
 
 func isNotBlank(s string) bool {
