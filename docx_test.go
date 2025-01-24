@@ -2,10 +2,12 @@ package gooxml_test
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
 	"github.com/zzhtl/goxml/color"
+	"github.com/zzhtl/goxml/common"
 	"github.com/zzhtl/goxml/document"
 	"github.com/zzhtl/goxml/measurement"
 	"github.com/zzhtl/goxml/schema/soo/wml"
@@ -92,10 +94,45 @@ func Test_addTable(t *testing.T) {
 						cellRun.AddText(val)
 					}
 				}
+
+				addImage(docx, "testdata/office/1.jpeg", newPara)
 			}
 		}
 	}
 	docx.SaveToFile("testdata/office/output.docx")
+}
+
+func addImage(docx *document.Document, imagePath string, newPara document.Paragraph) error {
+	img, err := common.ImageFromFile(imagePath)
+	if err != nil {
+		return fmt.Errorf("unable to load image: %v", err)
+	}
+	imageRef, err := docx.AddImage(img)
+	if err != nil {
+		return fmt.Errorf("unable to add image to documents: %v", err)
+	}
+	// 获取图片的原始宽度和高度
+	imgWidth := img.Size.X
+	imgHeight := img.Size.Y
+
+	// 计算缩放比例，确保宽高比保持一致，且图片最大宽度和高度为5.5英寸
+	maxSize := measurement.Point * 400
+	scale := math.Min(float64(maxSize)/float64(imgWidth), float64(maxSize)/float64(imgHeight))
+
+	// 缩放图片尺寸
+	newWidth := measurement.Distance(float64(imgWidth) * scale)
+	newHeight := measurement.Distance(float64(imgHeight) * scale)
+
+	// 插入图片到文档
+	newPara.Properties().SetAlignment(wml.ST_JcCenter)
+	addRun := newPara.AddRun()
+	run := newPara.InsertRunAfter(addRun)
+	imgInl, err := run.AddDrawingInline(imageRef)
+	if err != nil {
+		return fmt.Errorf("insert image error: %v", err)
+	}
+	imgInl.SetSize(newWidth, newHeight)
+	return nil
 }
 
 func getHeadingLevel(style string) string {
